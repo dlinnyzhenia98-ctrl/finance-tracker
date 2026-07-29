@@ -135,6 +135,9 @@
 
         // Загрузка данных из Google Таблицы
         async function loadExpenses() {
+            async function loadExpenses() {
+                console.log('🔍 Загрузка данных с URL:', API_URL);  // ← ДОБАВИТЬ ЭТУ СТРОКУ
+                console.log('🔑 SECRET_KEY:', SECRET_KEY);          // ← И ЭТУ
             try {
                 const response = await fetch(API_URL);
                 const result = await response.json();
