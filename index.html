@@ -5,106 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Finance Tracker</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <style>
-        :root {
-            --bg-color: var(--tg-theme-bg-color, #fff);
-            --text-color: var(--tg-theme-text-color, #000);
-            --hint-color: var(--tg-theme-hint-color, #999);
-            --button-color: var(--tg-theme-button-color, #2481cc);
-            --button-text-color: var(--tg-theme-button-text-color, #fff);
-            --secondary-bg: var(--tg-theme-secondary-bg-color, #f0f0f0);
-        }
-
-        body {
-            margin: 0;
-            padding: 15px;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            box-sizing: border-box;
-            padding-bottom: 100px;
-        }
-
-        h2 { margin-top: 0; font-size: 22px; font-weight: 700; }
-        
-        .input-group { margin-bottom: 15px; }
-        label { display: block; color: var(--hint-color); font-size: 13px; margin-bottom: 5px; }
-        
-        input, select {
-            width: 100%;
-            box-sizing: border-box;
-            padding: 12px;
-            border-radius: 10px;
-            border: 1px solid var(--secondary-bg);
-            background-color: var(--secondary-bg);
-            color: var(--text-color);
-            font-size: 16px;
-            outline: none;
-        }
-        
-        input:focus, select:focus { border: 2px solid var(--button-color); }
-
-        .list { margin-top: 20px; }
-        .item {
-            background-color: var(--secondary-bg);
-            padding: 12px;
-            border-radius: 12px;
-            margin-bottom: 10px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            animation: fadeIn 0.3s ease;
-        }
-        .item-info { display: flex; flex-direction: column; }
-        .item-cat { font-size: 13px; color: var(--hint-color); }
-        .item-amt { font-size: 17px; font-weight: 600; }
-        
-        .total-block {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: var(--secondary-bg);
-            padding: 15px;
-            text-align: center;
-            font-weight: bold;
-            font-size: 18px;
-            border-top: 1px solid var(--bg-color);
-        }
-        
-        .loading {
-            text-align: center;
-            padding: 20px;
-            color: var(--hint-color);
-        }
-        
-        .web-submit-btn {
-            display: none;
-            background: var(--button-color);
-            color: var(--button-text-color);
-            border: none;
-            padding: 15px;
-            border-radius: 12px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            width: 100%;
-            margin-top: 10px;
-        }
-        
-        .web-submit-btn.visible {
-            display: block;
-        }
-        
-        @keyframes fadeIn { 
-            from { opacity: 0; transform: translateY(10px); } 
-            to { opacity: 1; transform: translateY(0); } 
-        }
-    </style>
+    <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-
-    <h2>💰 Мои расходы</h2>
+    <h2 id="pageTitle">📤 Мои расходы</h2>
 
     <div class="input-group">
         <label>Сумма</label>
@@ -113,13 +17,12 @@
 
     <div class="input-group">
         <label>Категория</label>
-        <select id="category">
-            <option value="Продукты">🍔 Продукты</option>
-            <option value="Транспорт">🚗 Транспорт</option>
-            <option value="Ивенты">🎟 Ивенты</option>
-            <option value="Подписки">📱 Подписки</option>
-            <option value="Разное">📦 Разное</option>
-        </select>
+        <select id="category"></select>
+    </div>
+
+    <div class="input-group">
+        <label>Подкатегория</label>
+        <select id="subcategory"></select>
     </div>
 
     <div class="input-group">
@@ -127,198 +30,21 @@
         <input type="text" id="comment" placeholder="Например: Обед в кафе">
     </div>
 
-    <button id="webSubmitBtn" class="web-submit-btn" onclick="addExpense()">
-        ДОБАВИТЬ ТРАТУ
-    </button>
-
     <div class="loading" id="loading">Загрузка данных...</div>
-    <div class="list" id="expenseList"></div>
+    <div class="list" id="transactionList"></div>
 
     <div class="total-block">
         Итого: <span id="total">0</span> ₽
     </div>
 
-    <script>
-        // ==========================================
-        // НАСТРОЙКИ - ЗАМЕНИТЕ НА СВОИ!
-        // ==========================================
-        const API_URL = 'https://script.google.com/macros/s/AKfycby2vgQTJa70PwRpsXvCbVUM0Wsw5nVi_F8tqjLOdibmeJpqPxqSil0Vao3HjRkUkm_NqA/exec';
-        const SECRET_KEY = 'qwertyhgfdsazxcvbn';
-        
-        let tg;
-        let isTelegram = false;
-        
-        if (window.Telegram && window.Telegram.WebApp) {
-            tg = window.Telegram.WebApp;
-            isTelegram = true;
-            tg.expand();
-            tg.ready();
-        } else {
-            tg = {
-                showAlert: (msg) => alert(msg),
-                MainButton: {
-                    setText: () => {},
-                    onClick: () => {},
-                    show: () => {},
-                    hide: () => {},
-                    enable: () => {},
-                    showProgress: () => {},
-                    hideProgress: () => {}
-                },
-                HapticFeedback: {
-                    notificationOccurred: () => {}
-                }
-            };
-        }
+    <div class="tab-bar">
+        <button class="tab active" id="tabExpense" onclick="switchTab('expense')">📤 Расходы</button>
+        <button class="tab" id="tabIncome" onclick="switchTab('income')">💵 Доходы</button>
+    </div>
 
-        let expenses = [];
-
-        if (isTelegram) {
-            tg.MainButton.setText("ДОБАВИТЬ ТРАТУ");
-            tg.MainButton.onClick(addExpense);
-        }
-
-        async function loadExpenses() {
-            try {
-                const response = await fetch(API_URL);
-                const text = await response.text();
-                const result = JSON.parse(text);
-                
-                if (result.success) {
-                    expenses = result.data;
-                    renderList();
-                } else {
-                    if (isTelegram) tg.showAlert("Ошибка загрузки: " + result.error);
-                }
-            } catch (error) {
-                if (isTelegram) tg.showAlert("Ошибка соединения");
-            } finally {
-                document.getElementById('loading').style.display = 'none';
-            }
-        }
-        
-        async function addExpense() {
-    const amountInput = document.getElementById('amount');
-    const categoryInput = document.getElementById('category');
-    const commentInput = document.getElementById('comment');
-
-    const amount = parseFloat(amountInput.value);
-    
-    if (!amount || amount <= 0) {
-        if (isTelegram) {
-            tg.showAlert("Введите корректную сумму");
-            tg.HapticFeedback.notificationOccurred('error');
-        } else {
-            alert('Введите сумму больше 0');
-        }
-        return;
-    }
-
-    const category = categoryInput.value;
-    const comment = commentInput.value || '-';
-
-    const newExpense = {
-        secretKey: SECRET_KEY,
-        amount: amount,
-        category: category,
-        comment: comment
-    };
-
-    // МГНОВЕННО добавляем в интерфейс (оптимистичный UI)
-    const tempId = Date.now();
-    expenses.push({
-        date: new Date().toLocaleDateString('ru-RU'),
-        amount: amount,
-        category: category,
-        comment: comment,
-        _temp: true  // метка, что это временная запись
-    });
-    renderList();
-
-    // Очищаем поля СРАЗУ
-    amountInput.value = '';
-    commentInput.value = '';
-
-    if (isTelegram) {
-        tg.MainButton.showProgress(true);
-        tg.HapticFeedback.notificationOccurred('success');
-    } else {
-        const btn = document.getElementById('webSubmitBtn');
-        btn.textContent = 'Отправлено!';
-        btn.disabled = true;
-    }
-
-    // Отправляем в фонe (не ждём ответа)
-    fetch(API_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newExpense)
-    }).catch(() => {
-        // Игнорируем ошибки — данные уже в интерфейсе
-    });
-
-    // Перезагружаем данные через 2 секунды (чтобы Google Script успел обработать)
-    setTimeout(() => {
-        loadExpenses();
-    }, 2000);
-
-    if (isTelegram) {
-        setTimeout(() => tg.MainButton.hideProgress(), 500);
-    } else {
-        const btn = document.getElementById('webSubmitBtn');
-        setTimeout(() => {
-            btn.textContent = 'ДОБАВИТЬ ТРАТУ';
-            btn.disabled = false;
-            btn.classList.remove('visible');
-        }, 500);
-    }
-}
-
-        function renderList() {
-            const list = document.getElementById('expenseList');
-            list.innerHTML = '';
-            let total = 0;
-            
-            expenses.slice().reverse().forEach(e => {
-                const amount = parseFloat(e.amount) || 0;
-                total += amount;
-                const div = document.createElement('div');
-                div.className = 'item';
-                div.innerHTML = `
-                    <div class="item-info">
-                        <span class="item-amt">-${amount} ₽</span>
-                        <span class="item-cat">${e.category} • ${e.date}</span>
-                        ${e.comment && e.comment !== '-' ? `<span class="item-cat">${e.comment}</span>` : ''}
-                    </div>
-                `;
-                list.appendChild(div);
-            });
-            
-            document.getElementById('total').innerText = total.toFixed(2);
-        }
-
-        document.getElementById('amount').addEventListener('input', (e) => {
-            const amount = parseFloat(e.target.value);
-            if (amount && amount > 0) {
-                if (isTelegram) {
-                    tg.MainButton.show();
-                    tg.MainButton.enable();
-                } else {
-                    const btn = document.getElementById('webSubmitBtn');
-                    btn.classList.add('visible');
-                }
-            } else {
-                if (isTelegram) {
-                    tg.MainButton.hide();
-                } else {
-                    const btn = document.getElementById('webSubmitBtn');
-                    btn.classList.remove('visible');
-                }
-            }
-        });
-
-        loadExpenses();
-    </script>
+    <script src="js/config.js"></script>
+    <script src="js/categories.js"></script>
+    <script src="js/telegram.js"></script>
+    <script src="js/app.js"></script>
 </body>
 </html>
