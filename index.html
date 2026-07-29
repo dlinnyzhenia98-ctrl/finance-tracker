@@ -14,6 +14,7 @@
             --button-text-color: var(--tg-theme-button-text-color, #fff);
             --secondary-bg: var(--tg-theme-secondary-bg-color, #f0f0f0);
         }
+
         body {
             margin: 0;
             padding: 15px;
@@ -21,11 +22,14 @@
             background-color: var(--bg-color);
             color: var(--text-color);
             box-sizing: border-box;
-            padding-bottom: 80px;
+            padding-bottom: 100px;
         }
+
         h2 { margin-top: 0; font-size: 22px; font-weight: 700; }
+        
         .input-group { margin-bottom: 15px; }
         label { display: block; color: var(--hint-color); font-size: 13px; margin-bottom: 5px; }
+        
         input, select {
             width: 100%;
             box-sizing: border-box;
@@ -37,7 +41,9 @@
             font-size: 16px;
             outline: none;
         }
+        
         input:focus, select:focus { border: 2px solid var(--button-color); }
+
         .list { margin-top: 20px; }
         .item {
             background-color: var(--secondary-bg);
@@ -52,6 +58,7 @@
         .item-info { display: flex; flex-direction: column; }
         .item-cat { font-size: 13px; color: var(--hint-color); }
         .item-amt { font-size: 17px; font-weight: 600; }
+        
         .total-block {
             position: fixed;
             bottom: 0;
@@ -64,11 +71,32 @@
             font-size: 18px;
             border-top: 1px solid var(--bg-color);
         }
+        
         .loading {
             text-align: center;
             padding: 20px;
             color: var(--hint-color);
         }
+        
+        /* Кнопка для веб-версии */
+        .web-submit-btn {
+            display: none;
+            background: var(--button-color);
+            color: var(--button-text-color);
+            border: none;
+            padding: 15px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 10px;
+        }
+        
+        .web-submit-btn.visible {
+            display: block;
+        }
+        
         @keyframes fadeIn { 
             from { opacity: 0; transform: translateY(10px); } 
             to { opacity: 1; transform: translateY(0); } 
@@ -76,170 +104,254 @@
     </style>
 </head>
 <body>
+
     <h2>💰 Мои расходы</h2>
+
     <div class="input-group">
         <label>Сумма</label>
         <input type="number" id="amount" placeholder="0" inputmode="decimal">
     </div>
+
     <div class="input-group">
         <label>Категория</label>
         <select id="category">
             <option value="Продукты">🍔 Продукты</option>
             <option value="Транспорт"> Транспорт</option>
             <option value="Ивенты">🎟 Ивенты</option>
-            <option value="Подписки"> Подписки</option>
+            <option value="Подписки">📱 Подписки</option>
             <option value="Разное">📦 Разное</option>
         </select>
     </div>
+
     <div class="input-group">
         <label>Комментарий</label>
         <input type="text" id="comment" placeholder="Например: Обед в кафе">
     </div>
+
+    <!-- Кнопка для веб-версии -->
+    <button id="webSubmitBtn" class="web-submit-btn" onclick="addExpense()">
+        ДОБАВИТЬ ТРАТУ
+    </button>
+
     <div class="loading" id="loading">Загрузка данных...</div>
     <div class="list" id="expenseList"></div>
+
     <div class="total-block">
         Итого: <span id="total">0</span> ₽
     </div>
+
     <script>
-        const API_URL = 'https://script.google.com/macros/s/AKfycbxRu65gwegNe6aLTc33yGKHIy7Xbx0UukteChrFT5bjoF2cUm15FtM4_IuCuFR5dGvUYw/exec';
+        // ==========================================
+        // НАСТРОЙКИ
+        // ==========================================
+        const API_URL = 'https://script.google.com/macros/s/AKfycbxRu65gwegNe6aLTc33yGKHIy7Xbx0UukteChrFT5bjoF2cUm15FtM4_IuCuFR5dGvUYw/exec';      
         const SECRET_KEY = 'qwertyhgfdsazxcvbn';
         
-        const tg = window.Telegram.WebApp;
-        tg.expand();
-        tg.ready();
+        // Инициализация Telegram или работа в браузере
+        let tg;
+        let isTelegram = false;
         
+        if (window.Telegram && window.Telegram.WebApp) {
+            tg = window.Telegram.WebApp;
+            isTelegram = true;
+            tg.expand();
+            tg.ready();
+        } else {
+            // Заглушка для браузера
+            tg = {
+                showAlert: (msg) => alert(msg),
+                MainButton: {
+                    setText: () => {},
+                    onClick: () => {},
+                    show: () => {},
+                    hide: () => {},
+                    enable: () => {},
+                    showProgress: () => {},
+                    hideProgress: () => {}
+                },
+                HapticFeedback: {
+                    notificationOccurred: () => {}
+                }
+            };
+        }
+
         let expenses = [];
-        
-        tg.MainButton.setText("ДОБАВИТЬ ТРАТУ");
-        tg.MainButton.onClick(addExpense);
 
+        // Настройка кнопки в Telegram
+        if (isTelegram) {
+            tg.MainButton.setText("ДОБАВИТЬ ТРАТУ");
+            tg.MainButton.onClick(addExpense);
+        }
+
+        // Загрузка данных из Google Таблицы
         async function loadExpenses() {
-    console.log('🚀 НАЧАЛО ЗАГРУЗКИ ДАННЫХ');
-    console.log('Целевой URL:', API_URL);
-    
-    try {
-        const response = await fetch(API_URL);
-        
-        console.log('📡 Статус ответа:', response.status);
-        console.log('📡 Ответ OK?', response.ok);
-        
-        // Читаем ответ как текст, чтобы увидеть ошибку, даже если это не JSON
-        const textResponse = await response.text();
-        console.log('📄 Сырой ответ от сервера:', textResponse);
-        
-        // Пробуем распарсить в JSON
-        const result = JSON.parse(textResponse);
-        
-        if (result.success) {
-            console.log('✅ Данные успешно получены!', result.data);
-            expenses = result.data;
-            renderList();
-        } else {
-            console.error('❌ Логическая ошибка от сервера:', result.error);
-            tg.showAlert("Ошибка сервера: " + result.error);
+            console.log(' НАЧАЛО ЗАГРУЗКИ ДАННЫХ');
+            console.log('Целевой URL:', API_URL);
+            
+            try {
+                const response = await fetch(API_URL);
+                
+                console.log('📡 Статус ответа:', response.status);
+                console.log('📡 Ответ OK?', response.ok);
+                
+                const textResponse = await response.text();
+                console.log('📄 Сырой ответ от сервера:', textResponse);
+                
+                const result = JSON.parse(textResponse);
+                
+                if (result.success) {
+                    console.log('✅ Данные успешно получены!', result.data);
+                    expenses = result.data;
+                    renderList();
+                } else {
+                    console.error('❌ Логическая ошибка от сервера:', result.error);
+                    tg.showAlert("Ошибка загрузки данных: " + result.error);
+                }
+            } catch (error) {
+                console.error('💥 КРИТИЧЕСКАЯ ОШИБКА JS:', error);
+                tg.showAlert("Ошибка соединения с сервером: " + error.message);
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
         }
-    } catch (error) {
-        console.error('💥 КРИТИЧЕСКАЯ ОШИБКА JS:', error);
-        tg.showAlert("Не удалось соединиться. Ошибка: " + error.message);
-    } finally {
-        document.getElementById('loading').style.display = 'none';
-    }
-}        
+
+        // Добавление новой траты
         async function addExpense() {
-    console.log('🔵 НАЧАЛО ОТПРАВКИ ДАННЫХ');
-    
-    const amountInput = document.getElementById('amount');
-    const categoryInput = document.getElementById('category');
-    const commentInput = document.getElementById('comment');
-
-    const amount = parseFloat(amountInput.value);
-    
-    if (!amount || amount <= 0) {
-        console.error('❌ Неверная сумма:', amount);
-        tg.showAlert("Введите корректную сумму");
-        tg.HapticFeedback.notificationOccurred('error');
-        return;
-    }
-
-    const newExpense = {
-        secretKey: SECRET_KEY,
-        amount: amount,
-        category: categoryInput.value,
-        comment: commentInput.value || '-'
-    };
-
-    console.log('📦 Отправляемые данные:', JSON.stringify(newExpense));
-    console.log(' URL:', API_URL);
-
-    // Блокируем кнопку на время отправки
-    tg.MainButton.showProgress(true);
-
-    try {
-        console.log('📡 Отправка POST запроса...');
-        
-        const response = await fetch(API_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(newExpense)
-        });
-
-        console.log('📡 Статус ответа:', response.status);
-        console.log('📡 Ответ OK?', response.ok);
-        
-        const textResponse = await response.text();
-        console.log('📄 Сырой ответ:', textResponse);
-        
-        const result = JSON.parse(textResponse);
-
-        if (result.success) {
-            console.log('✅ УСПЕХ! Данные сохранены');
-            tg.HapticFeedback.notificationOccurred('success');
+            console.log('🔵 НАЧАЛО ОТПРАВКИ ДАННЫХ');
             
-            // Очищаем поля
-            amountInput.value = '';
-            commentInput.value = '';
+            const amountInput = document.getElementById('amount');
+            const categoryInput = document.getElementById('category');
+            const commentInput = document.getElementById('comment');
+
+            const amount = parseFloat(amountInput.value);
             
-            // Перезагружаем данные из таблицы
-            await loadExpenses();
-        } else {
-            console.error('❌ Ошибка сервера:', result.error);
-            tg.showAlert("Ошибка сохранения: " + result.error);
-            tg.HapticFeedback.notificationOccurred('error');
+            if (!amount || amount <= 0) {
+                console.error('❌ Неверная сумма:', amount);
+                tg.showAlert("Введите корректную сумму");
+                if (isTelegram) tg.HapticFeedback.notificationOccurred('error');
+                return;
+            }
+
+            const newExpense = {
+                secretKey: SECRET_KEY,
+                amount: amount,
+                category: categoryInput.value,
+                comment: commentInput.value || '-'
+            };
+
+            console.log('📦 Отправляемые данные:', JSON.stringify(newExpense));
+            console.log(' URL:', API_URL);
+
+            // Показываем прогресс в Telegram
+            if (isTelegram) {
+                tg.MainButton.showProgress(true);
+            } else {
+                const btn = document.getElementById('webSubmitBtn');
+                btn.textContent = 'Отправка...';
+                btn.disabled = true;
+            }
+
+            try {
+                console.log('📡 Отправка POST запроса...');
+                
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(newExpense)
+                });
+
+                console.log('📡 Статус ответа:', response.status);
+                console.log('📡 Ответ OK?', response.ok);
+                
+                const textResponse = await response.text();
+                console.log(' Сырой ответ:', textResponse);
+                
+                const result = JSON.parse(textResponse);
+
+                if (result.success) {
+                    console.log('✅ УСПЕХ! Данные сохранены');
+                    if (isTelegram) {
+                        tg.HapticFeedback.notificationOccurred('success');
+                    }
+                    
+                    // Очищаем поля
+                    amountInput.value = '';
+                    commentInput.value = '';
+                    
+                    // Скрываем кнопку в веб-версии
+                    if (!isTelegram) {
+                        const btn = document.getElementById('webSubmitBtn');
+                        btn.textContent = 'ДОБАВИТЬ ТРАТУ';
+                        btn.disabled = false;
+                        btn.classList.remove('visible');
+                    }
+                    
+                    // Перезагружаем данные из таблицы
+                    await loadExpenses();
+                } else {
+                    console.error(' Ошибка сервера:', result.error);
+                    tg.showAlert("Ошибка сохранения: " + result.error);
+                    if (isTelegram) tg.HapticFeedback.notificationOccurred('error');
+                }
+            } catch (error) {
+                console.error('💥 КРИТИЧЕСКАЯ ОШИБКА ОТПРАВКИ:', error);
+                tg.showAlert("Ошибка соединения: " + error.message);
+                if (isTelegram) tg.HapticFeedback.notificationOccurred('error');
+            } finally {
+                if (isTelegram) {
+                    tg.MainButton.hideProgress();
+                }
+            }
         }
-    } catch (error) {
-        console.error('💥 КРИТИЧЕСКАЯ ОШИБКА ОТПРАВКИ:', error);
-        tg.showAlert("Ошибка соединения: " + error.message);
-        tg.HapticFeedback.notificationOccurred('error');
-    } finally {
-        tg.MainButton.hideProgress();
-    }
-}
-        
+
+        // Отрисовка списка
         function renderList() {
             const list = document.getElementById('expenseList');
             list.innerHTML = '';
             let total = 0;
+            
+            // Сортировка: новые сверху
             expenses.slice().reverse().forEach(e => {
                 total += parseFloat(e.amount) || 0;
                 const div = document.createElement('div');
                 div.className = 'item';
-                div.innerHTML = '<div class="item-info"><span class="item-amt">-' + e.amount + ' ₽</span><span class="item-cat">' + e.category + ' • ' + e.date + '</span></div>';
+                div.innerHTML = `
+                    <div class="item-info">
+                        <span class="item-amt">-${e.amount} ₽</span>
+                        <span class="item-cat">${e.category} • ${e.date}</span>
+                        ${e.comment && e.comment !== '-' ? `<span class="item-cat">${e.comment}</span>` : ''}
+                    </div>
+                `;
                 list.appendChild(div);
             });
+            
             document.getElementById('total').innerText = total.toFixed(2);
         }
-        
-        document.getElementById('amount').addEventListener('input', function(e) {
-            if (e.target.value && parseFloat(e.target.value) > 0) {
-                tg.MainButton.show();
-                tg.MainButton.enable();
+
+        // Показываем/скрываем кнопку в зависимости от ввода
+        document.getElementById('amount').addEventListener('input', (e) => {
+            const amount = parseFloat(e.target.value);
+            if (amount && amount > 0) {
+                if (isTelegram) {
+                    tg.MainButton.show();
+                    tg.MainButton.enable();
+                } else {
+                    const btn = document.getElementById('webSubmitBtn');
+                    btn.classList.add('visible');
+                }
             } else {
-                tg.MainButton.hide();
+                if (isTelegram) {
+                    tg.MainButton.hide();
+                } else {
+                    const btn = document.getElementById('webSubmitBtn');
+                    btn.classList.remove('visible');
+                }
             }
         });
-        
+
+        // Загружаем данные при старте
         loadExpenses();
     </script>
 </body>
