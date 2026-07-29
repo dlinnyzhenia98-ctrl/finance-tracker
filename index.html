@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Finance Tracker</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --bg-color: var(--tg-theme-bg-color, #fff);
+            --text-color: var(--tg-theme-text-color, #000);
+            --hint-color: var(--tg-theme-hint-color, #999);
+            --button-color: var(--tg-theme-button-color, #2481cc);
+            --button-text-color: var(--tg-theme-button-text-color, #fff);
+            --secondary-bg: var(--tg-theme-secondary-bg-color, #f0f0f0);
+        }
+
+        body {
+            margin: 0;
+            padding: 15px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            box-sizing: border-box;
+            padding-bottom: 80px;
+        }
+
+        h2 { margin-top: 0; font-size: 22px; font-weight: 700; }
+        
+        .input-group { margin-bottom: 15px; }
+        label { display: block; color: var(--hint-color); font-size: 13px; margin-bottom: 5px; }
+        
+        input, select {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 12px;
+            border-radius: 10px;
+            border: 1px solid var(--secondary-bg);
+            background-color: var(--secondary-bg);
+            color: var(--text-color);
+            font-size: 16px;
+            outline: none;
+        }
+        
+        input:focus, select:focus { border: 2px solid var(--button-color); }
+
+        .list { margin-top: 20px; }
+        .item {
+            background-color: var(--secondary-bg);
+            padding: 12px;
+            border-radius: 12px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            animation: fadeIn 0.3s ease;
+        }
+        .item-info { display: flex; flex-direction: column; }
+        .item-cat { font-size: 13px; color: var(--hint-color); }
+        .item-amt { font-size: 17px; font-weight: 600; }
+        
+        .total-block {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--secondary-bg);
+            padding: 15px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 18px;
+            border-top: 1px solid var(--bg-color);
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: var(--hint-color);
+        }
+        
+        @keyframes fadeIn { 
+            from { opacity: 0; transform: translateY(10px); } 
+            to { opacity: 1; transform: translateY(0); } 
+        }
+    </style>
+</head>
+<body>
+
+    <h2>💰 Мои расходы</h2>
+
+    <div class="input-group">
+        <label>Сумма</label>
+        <input type="number" id="amount" placeholder="0" inputmode="decimal">
+    </div>
+
+    <div class="input-group">
+        <label>Категория</label>
+        <select id="category">
+            <option value="Продукты"> Продукты</option>
+            <option value="Транспорт">🚗 Транспорт</option>
+            <option value="Ивенты">🎟 Ивенты</option>
+            <option value="Подписки">📱 Подписки</option>
+            <option value="Разное">📦 Разное</option>
+        </select>
+    </div>
+
+    <div class="input-group">
+        <label>Комментарий</label>
+        <input type="text" id="comment" placeholder="Например: Обед в кафе">
+    </div>
+
+    <div class="loading" id="loading">Загрузка данных...</div>
+    <div class="list" id="expenseList"></div>
+
+    <div class="total-block">
+        Итого: <span id="total">0</span> ₽
+    </div>
+
+    <script>
+        // ==========================================
+        // НАСТРОЙКИ
+        // ==========================================
+        const API_URL = 'https://script.google.com/macros/s/AKfycbx8z_44uOQMa7-6W-hCvLX7gb8IOSfZ4OVuP8YWOuBdMyHgnBw2cyZr4qsMmY_xiPMTRg/exec';
+        const SECRET_KEY = 'Djhjyt;crfzJ,kfcnm'; // Должен совпадать с Google Script
+        
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        tg.ready();
+
+        let expenses = [];
+
+        // Настройка главной кнопки
+        tg.MainButton.setText("ДОБАВИТЬ ТРАТУ");
+        tg.MainButton.onClick(addExpense);
+
+        // Загрузка данных из Google Таблицы
+        async function loadExpenses() {
+            try {
+                const response = await fetch(API_URL);
+                const result = await response.json();
+                
+                if (result.success) {
+                    expenses = result.data;
+                    renderList();
+                } else {
+                    tg.showAlert("Ошибка загрузки данных: " + result.error);
+                }
+            } catch (error) {
+                tg.showAlert("Ошибка соединения с сервером");
+                console.error(error);
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        // Добавление новой траты
+        async function addExpense() {
+            const amountInput = document.getElementById('amount');
+            const categoryInput = document.getElementById('category');
+            const commentInput = document.getElementById('comment');
+
+            const amount = parseFloat(amountInput.value);
+            
+            if (!amount || amount <= 0) {
+                tg.showAlert("Введите корректную сумму");
+                tg.HapticFeedback.notificationOccurred('error');
+                return;
+            }
+
+            const newExpense = {
+                secretKey: SECRET_KEY, // Добавляем секретный ключ
+                amount: amount,
+                category: categoryInput.value,
+                comment: commentInput.value || '-'
+            };
+
+            // Блокируем кнопку на время отправки
+            tg.MainButton.showProgress(true);
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(newExpense)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // Успех
+                    tg.HapticFeedback.notificationOccurred('success');
+                    
+                    // Очищаем поля
+                    amountInput.value = '';
+                    commentInput.value = '';
+                    
+                    // Перезагружаем данные из таблицы
+                    await loadExpenses();
+                } else {
+                    tg.showAlert("Ошибка сохранения: " + result.error);
+                    tg.HapticFeedback.notificationOccurred('error');
+                }
+            } catch (error) {
+                tg.showAlert("Ошибка соединения с сервером");
+                tg.HapticFeedback.notificationOccurred('error');
+                console.error(error);
+            } finally {
+                tg.MainButton.hideProgress();
+            }
+        }
+
+        // Отрисовка списка
+        function renderList() {
+            const list = document.getElementById('expenseList');
+            list.innerHTML = '';
+            let total = 0;
+            
+            // Сортировка: новые сверху
+            expenses.slice().reverse().forEach(e => {
+                total += parseFloat(e.amount) || 0;
+                const div = document.createElement('div');
+                div.className = 'item';
+                div.innerHTML = `
+                    <div class="item-info">
+                        <span class="item-amt">-${e.amount} ₽</span>
+                        <span class="item-cat">${e.category} • ${e.date}</span>
+                        ${e.comment && e.comment !== '-' ? `<span class="item-cat">${e.comment}</span>` : ''}
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+            
+            document.getElementById('total').innerText = total.toFixed(2);
+        }
+
+        // Показываем/скрываем кнопку в зависимости от ввода
+        document.getElementById('amount').addEventListener('input', (e) => {
+            if (e.target.value && parseFloat(e.target.value) > 0) {
+                tg.MainButton.show();
+                tg.MainButton.enable();
+            } else {
+                tg.MainButton.hide();
+            }
+        });
+
+        // Загружаем данные при старте
+        loadExpenses();
+    </script>
+</body>
+</html>
