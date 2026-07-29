@@ -146,51 +146,76 @@
     }
 }        
         async function addExpense() {
-            const amountInput = document.getElementById('amount');
-            const categoryInput = document.getElementById('category');
-            const commentInput = document.getElementById('comment');
-            const amount = parseFloat(amountInput.value);
+    console.log('🔵 НАЧАЛО ОТПРАВКИ ДАННЫХ');
+    
+    const amountInput = document.getElementById('amount');
+    const categoryInput = document.getElementById('category');
+    const commentInput = document.getElementById('comment');
+
+    const amount = parseFloat(amountInput.value);
+    
+    if (!amount || amount <= 0) {
+        console.error('❌ Неверная сумма:', amount);
+        tg.showAlert("Введите корректную сумму");
+        tg.HapticFeedback.notificationOccurred('error');
+        return;
+    }
+
+    const newExpense = {
+        secretKey: SECRET_KEY,
+        amount: amount,
+        category: categoryInput.value,
+        comment: commentInput.value || '-'
+    };
+
+    console.log('📦 Отправляемые данные:', JSON.stringify(newExpense));
+    console.log(' URL:', API_URL);
+
+    // Блокируем кнопку на время отправки
+    tg.MainButton.showProgress(true);
+
+    try {
+        console.log('📡 Отправка POST запроса...');
+        
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(newExpense)
+        });
+
+        console.log('📡 Статус ответа:', response.status);
+        console.log('📡 Ответ OK?', response.ok);
+        
+        const textResponse = await response.text();
+        console.log('📄 Сырой ответ:', textResponse);
+        
+        const result = JSON.parse(textResponse);
+
+        if (result.success) {
+            console.log('✅ УСПЕХ! Данные сохранены');
+            tg.HapticFeedback.notificationOccurred('success');
             
-            if (!amount || amount <= 0) {
-                tg.showAlert("Введите корректную сумму");
-                tg.HapticFeedback.notificationOccurred('error');
-                return;
-            }
+            // Очищаем поля
+            amountInput.value = '';
+            commentInput.value = '';
             
-            const newExpense = {
-                secretKey: SECRET_KEY,
-                amount: amount,
-                category: categoryInput.value,
-                comment: commentInput.value || '-'
-            };
-            
-            tg.MainButton.showProgress(true);
-            
-            try {
-                const response = await fetch(API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(newExpense)
-                });
-                const result = await response.json();
-                
-                if (result.success) {
-                    tg.HapticFeedback.notificationOccurred('success');
-                    amountInput.value = '';
-                    commentInput.value = '';
-                    await loadExpenses();
-                } else {
-                    tg.showAlert("Ошибка сохранения: " + result.error);
-                    tg.HapticFeedback.notificationOccurred('error');
-                }
-            } catch (error) {
-                tg.showAlert("Ошибка соединения с сервером");
-                tg.HapticFeedback.notificationOccurred('error');
-                console.error(error);
-            } finally {
-                tg.MainButton.hideProgress();
-            }
+            // Перезагружаем данные из таблицы
+            await loadExpenses();
+        } else {
+            console.error('❌ Ошибка сервера:', result.error);
+            tg.showAlert("Ошибка сохранения: " + result.error);
+            tg.HapticFeedback.notificationOccurred('error');
         }
+    } catch (error) {
+        console.error('💥 КРИТИЧЕСКАЯ ОШИБКА ОТПРАВКИ:', error);
+        tg.showAlert("Ошибка соединения: " + error.message);
+        tg.HapticFeedback.notificationOccurred('error');
+    } finally {
+        tg.MainButton.hideProgress();
+    }
+}
         
         function renderList() {
             const list = document.getElementById('expenseList');
