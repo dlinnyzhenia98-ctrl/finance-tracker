@@ -196,76 +196,84 @@
                 document.getElementById('loading').style.display = 'none';
             }
         }
-
+        
         async function addExpense() {
-            const amountInput = document.getElementById('amount');
-            const categoryInput = document.getElementById('category');
-            const commentInput = document.getElementById('comment');
+    const amountInput = document.getElementById('amount');
+    const categoryInput = document.getElementById('category');
+    const commentInput = document.getElementById('comment');
 
-            const amount = parseFloat(amountInput.value);
-            
-            if (!amount || amount <= 0) {
-                if (isTelegram) {
-                    tg.showAlert("Введите корректную сумму");
-                    tg.HapticFeedback.notificationOccurred('error');
-                } else {
-                    alert('Введите сумму больше 0');
-                }
-                return;
-            }
-
-            const newExpense = {
-                secretKey: SECRET_KEY,
-                amount: amount,
-                category: categoryInput.value,
-                comment: commentInput.value || '-'
-            };
-
-            if (isTelegram) {
-                tg.MainButton.showProgress(true);
-            } else {
-                const btn = document.getElementById('webSubmitBtn');
-                btn.textContent = 'Отправка...';
-                btn.disabled = true;
-            }
-
-            try {
-                const response = await fetch(API_URL, {
-                    method: 'POST',
-                    mode: 'no-cors',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(newExpense)
-                });
-
-                if (isTelegram) {
-                    tg.HapticFeedback.notificationOccurred('success');
-                }
-                
-                amountInput.value = '';
-                commentInput.value = '';
-                
-                if (!isTelegram) {
-                    const btn = document.getElementById('webSubmitBtn');
-                    btn.textContent = 'ДОБАВИТЬ ТРАТУ';
-                    btn.disabled = false;
-                    btn.classList.remove('visible');
-                }
-                
-                setTimeout(() => loadExpenses(), 1500);
-                
-            } catch (error) {
-                if (isTelegram) {
-                    tg.showAlert("Ошибка соединения");
-                    tg.HapticFeedback.notificationOccurred('error');
-                }
-            } finally {
-                if (isTelegram) {
-                    tg.MainButton.hideProgress();
-                }
-            }
+    const amount = parseFloat(amountInput.value);
+    
+    if (!amount || amount <= 0) {
+        if (isTelegram) {
+            tg.showAlert("Введите корректную сумму");
+            tg.HapticFeedback.notificationOccurred('error');
+        } else {
+            alert('Введите сумму больше 0');
         }
+        return;
+    }
+
+    const category = categoryInput.value;
+    const comment = commentInput.value || '-';
+
+    const newExpense = {
+        secretKey: SECRET_KEY,
+        amount: amount,
+        category: category,
+        comment: comment
+    };
+
+    // МГНОВЕННО добавляем в интерфейс (оптимистичный UI)
+    const tempId = Date.now();
+    expenses.push({
+        date: new Date().toLocaleDateString('ru-RU'),
+        amount: amount,
+        category: category,
+        comment: comment,
+        _temp: true  // метка, что это временная запись
+    });
+    renderList();
+
+    // Очищаем поля СРАЗУ
+    amountInput.value = '';
+    commentInput.value = '';
+
+    if (isTelegram) {
+        tg.MainButton.showProgress(true);
+        tg.HapticFeedback.notificationOccurred('success');
+    } else {
+        const btn = document.getElementById('webSubmitBtn');
+        btn.textContent = 'Отправлено!';
+        btn.disabled = true;
+    }
+
+    // Отправляем в фонe (не ждём ответа)
+    fetch(API_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newExpense)
+    }).catch(() => {
+        // Игнорируем ошибки — данные уже в интерфейсе
+    });
+
+    // Перезагружаем данные через 2 секунды (чтобы Google Script успел обработать)
+    setTimeout(() => {
+        loadExpenses();
+    }, 2000);
+
+    if (isTelegram) {
+        setTimeout(() => tg.MainButton.hideProgress(), 500);
+    } else {
+        const btn = document.getElementById('webSubmitBtn');
+        setTimeout(() => {
+            btn.textContent = 'ДОБАВИТЬ ТРАТУ';
+            btn.disabled = false;
+            btn.classList.remove('visible');
+        }, 500);
+    }
+}
 
         function renderList() {
             const list = document.getElementById('expenseList');
