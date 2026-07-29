@@ -78,7 +78,6 @@
             color: var(--hint-color);
         }
         
-        /* Кнопка для веб-версии */
         .web-submit-btn {
             display: none;
             background: var(--button-color);
@@ -116,7 +115,7 @@
         <label>Категория</label>
         <select id="category">
             <option value="Продукты">🍔 Продукты</option>
-            <option value="Транспорт"> Транспорт</option>
+            <option value="Транспорт">🚗 Транспорт</option>
             <option value="Ивенты">🎟 Ивенты</option>
             <option value="Подписки">📱 Подписки</option>
             <option value="Разное">📦 Разное</option>
@@ -128,7 +127,6 @@
         <input type="text" id="comment" placeholder="Например: Обед в кафе">
     </div>
 
-    <!-- Кнопка для веб-версии -->
     <button id="webSubmitBtn" class="web-submit-btn" onclick="addExpense()">
         ДОБАВИТЬ ТРАТУ
     </button>
@@ -142,12 +140,11 @@
 
     <script>
         // ==========================================
-        // НАСТРОЙКИ
+        // НАСТРОЙКИ - ЗАМЕНИТЕ НА СВОИ!
         // ==========================================
-        const API_URL = 'https://script.google.com/macros/s/AKfycbxRu65gwegNe6aLTc33yGKHIy7Xbx0UukteChrFT5bjoF2cUm15FtM4_IuCuFR5dGvUYw/exec';      
+        const API_URL = 'https://script.google.com/macros/s/AKfycby2vgQTJa70PwRpsXvCbVUM0Wsw5nVi_F8tqjLOdibmeJpqPxqSil0Vao3HjRkUkm_NqA/exec';
         const SECRET_KEY = 'qwertyhgfdsazxcvbn';
         
-        // Инициализация Telegram или работа в браузере
         let tg;
         let isTelegram = false;
         
@@ -157,7 +154,6 @@
             tg.expand();
             tg.ready();
         } else {
-            // Заглушка для браузера
             tg = {
                 showAlert: (msg) => alert(msg),
                 MainButton: {
@@ -177,48 +173,31 @@
 
         let expenses = [];
 
-        // Настройка кнопки в Telegram
         if (isTelegram) {
             tg.MainButton.setText("ДОБАВИТЬ ТРАТУ");
             tg.MainButton.onClick(addExpense);
         }
 
-        // Загрузка данных из Google Таблицы
         async function loadExpenses() {
-            console.log(' НАЧАЛО ЗАГРУЗКИ ДАННЫХ');
-            console.log('Целевой URL:', API_URL);
-            
             try {
                 const response = await fetch(API_URL);
-                
-                console.log('📡 Статус ответа:', response.status);
-                console.log('📡 Ответ OK?', response.ok);
-                
-                const textResponse = await response.text();
-                console.log('📄 Сырой ответ от сервера:', textResponse);
-                
-                const result = JSON.parse(textResponse);
+                const text = await response.text();
+                const result = JSON.parse(text);
                 
                 if (result.success) {
-                    console.log('✅ Данные успешно получены!', result.data);
                     expenses = result.data;
                     renderList();
                 } else {
-                    console.error('❌ Логическая ошибка от сервера:', result.error);
-                    tg.showAlert("Ошибка загрузки данных: " + result.error);
+                    if (isTelegram) tg.showAlert("Ошибка загрузки: " + result.error);
                 }
             } catch (error) {
-                console.error('💥 КРИТИЧЕСКАЯ ОШИБКА JS:', error);
-                tg.showAlert("Ошибка соединения с сервером: " + error.message);
+                if (isTelegram) tg.showAlert("Ошибка соединения");
             } finally {
                 document.getElementById('loading').style.display = 'none';
             }
         }
 
-        // Добавление новой траты
         async function addExpense() {
-            console.log('🔵 НАЧАЛО ОТПРАВКИ ДАННЫХ');
-            
             const amountInput = document.getElementById('amount');
             const categoryInput = document.getElementById('category');
             const commentInput = document.getElementById('comment');
@@ -226,9 +205,12 @@
             const amount = parseFloat(amountInput.value);
             
             if (!amount || amount <= 0) {
-                console.error('❌ Неверная сумма:', amount);
-                tg.showAlert("Введите корректную сумму");
-                if (isTelegram) tg.HapticFeedback.notificationOccurred('error');
+                if (isTelegram) {
+                    tg.showAlert("Введите корректную сумму");
+                    tg.HapticFeedback.notificationOccurred('error');
+                } else {
+                    alert('Введите сумму больше 0');
+                }
                 return;
             }
 
@@ -239,10 +221,6 @@
                 comment: commentInput.value || '-'
             };
 
-            console.log('📦 Отправляемые данные:', JSON.stringify(newExpense));
-            console.log(' URL:', API_URL);
-
-            // Показываем прогресс в Telegram
             if (isTelegram) {
                 tg.MainButton.showProgress(true);
             } else {
@@ -252,53 +230,36 @@
             }
 
             try {
-                console.log('📡 Отправка POST запроса...');
-                
                 const response = await fetch(API_URL, {
                     method: 'POST',
+                    mode: 'no-cors',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify(newExpense)
                 });
 
-                console.log('📡 Статус ответа:', response.status);
-                console.log('📡 Ответ OK?', response.ok);
-                
-                const textResponse = await response.text();
-                console.log(' Сырой ответ:', textResponse);
-                
-                const result = JSON.parse(textResponse);
-
-                if (result.success) {
-                    console.log('✅ УСПЕХ! Данные сохранены');
-                    if (isTelegram) {
-                        tg.HapticFeedback.notificationOccurred('success');
-                    }
-                    
-                    // Очищаем поля
-                    amountInput.value = '';
-                    commentInput.value = '';
-                    
-                    // Скрываем кнопку в веб-версии
-                    if (!isTelegram) {
-                        const btn = document.getElementById('webSubmitBtn');
-                        btn.textContent = 'ДОБАВИТЬ ТРАТУ';
-                        btn.disabled = false;
-                        btn.classList.remove('visible');
-                    }
-                    
-                    // Перезагружаем данные из таблицы
-                    await loadExpenses();
-                } else {
-                    console.error(' Ошибка сервера:', result.error);
-                    tg.showAlert("Ошибка сохранения: " + result.error);
-                    if (isTelegram) tg.HapticFeedback.notificationOccurred('error');
+                if (isTelegram) {
+                    tg.HapticFeedback.notificationOccurred('success');
                 }
+                
+                amountInput.value = '';
+                commentInput.value = '';
+                
+                if (!isTelegram) {
+                    const btn = document.getElementById('webSubmitBtn');
+                    btn.textContent = 'ДОБАВИТЬ ТРАТУ';
+                    btn.disabled = false;
+                    btn.classList.remove('visible');
+                }
+                
+                setTimeout(() => loadExpenses(), 1500);
+                
             } catch (error) {
-                console.error('💥 КРИТИЧЕСКАЯ ОШИБКА ОТПРАВКИ:', error);
-                tg.showAlert("Ошибка соединения: " + error.message);
-                if (isTelegram) tg.HapticFeedback.notificationOccurred('error');
+                if (isTelegram) {
+                    tg.showAlert("Ошибка соединения");
+                    tg.HapticFeedback.notificationOccurred('error');
+                }
             } finally {
                 if (isTelegram) {
                     tg.MainButton.hideProgress();
@@ -306,20 +267,19 @@
             }
         }
 
-        // Отрисовка списка
         function renderList() {
             const list = document.getElementById('expenseList');
             list.innerHTML = '';
             let total = 0;
             
-            // Сортировка: новые сверху
             expenses.slice().reverse().forEach(e => {
-                total += parseFloat(e.amount) || 0;
+                const amount = parseFloat(e.amount) || 0;
+                total += amount;
                 const div = document.createElement('div');
                 div.className = 'item';
                 div.innerHTML = `
                     <div class="item-info">
-                        <span class="item-amt">-${e.amount} ₽</span>
+                        <span class="item-amt">-${amount} ₽</span>
                         <span class="item-cat">${e.category} • ${e.date}</span>
                         ${e.comment && e.comment !== '-' ? `<span class="item-cat">${e.comment}</span>` : ''}
                     </div>
@@ -330,7 +290,6 @@
             document.getElementById('total').innerText = total.toFixed(2);
         }
 
-        // Показываем/скрываем кнопку в зависимости от ввода
         document.getElementById('amount').addEventListener('input', (e) => {
             const amount = parseFloat(e.target.value);
             if (amount && amount > 0) {
@@ -351,7 +310,6 @@
             }
         });
 
-        // Загружаем данные при старте
         loadExpenses();
     </script>
 </body>
